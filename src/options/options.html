@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YouTube Summarizer settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>YouTube Summarizer</h1>
+      <p class="meta">Settings <span aria-hidden="true">·</span> Version <span id="version">-</span></p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </header>
+
+    <section aria-labelledby="instruction-heading">
+      <h2 id="instruction-heading">Instruction</h2>
+      <label for="instruction" class="field-label">Text sent to Gemini before the video address</label>
+      <p class="help" id="instruction-help">
+        Gemini receives this text, an empty line, then the address of the video.
+        The default text is a placeholder stored in <code>default-instruction.txt</code>
+        at the root of the extension. Replace it here or in that file with your own instruction.
+      </p>
+      <textarea id="instruction" rows="8" spellcheck="true" aria-describedby="instruction-help"></textarea>
+      <div class="row">
+        <button type="button" id="reset-instruction">Reset instruction to default</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="behavior-heading">
+      <h2 id="behavior-heading">Behavior</h2>
+
+      <div class="switch-row">
+        <div class="switch-text">
+          <label for="send-automatically" class="field-label">Send automatically</label>
+          <p class="help" id="send-help">Send the request as soon as the text is in the prompt field. When off, the field is filled and you send it yourself.</p>
+        </div>
+        <input type="checkbox" role="switch" id="send-automatically" aria-describedby="send-help">
+      </div>
+
+      <div class="switch-row">
+        <div class="switch-text">
+          <label for="reuse-window" class="field-label">Reuse the existing window</label>
+          <p class="help" id="reuse-help">Open each new summary in the Gemini popup window that is already open, instead of a new window.</p>
+        </div>
+        <input type="checkbox" role="switch" id="reuse-window" aria-describedby="reuse-help">
+      </div>
+    </section>
+
+    <section aria-labelledby="window-heading">
+      <h2 id="window-heading">Window</h2>
+      <p class="help">The size and position of the Gemini popup window are saved when you resize or move it.</p>
+      <div class="row">
+        <button type="button" id="reset-window">Reset window size and position</button>
+      </div>
+    </section>
+
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

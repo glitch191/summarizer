@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Summarizer",
+  "version": "0.1.0",
+  "description": "Adds a Summarize entry to the context menu of YouTube videos. It opens Gemini in a popup window and sends your instruction followed by the video address.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{9f130883-b156-4f72-84cb-8e7aa22075db}",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": ["contextMenus", "storage", "clipboardWrite"],
+  "host_permissions": ["https://gemini.google.com/*"],
+  "background": {
+    "scripts": ["src/background.js"],
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["src/content/selectors.js", "src/content/gemini.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  }
+}

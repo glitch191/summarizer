@@ -1,0 +1,88 @@
+# Packages the extension when a release is published and attaches the archive
+# and its SHA-256 checksum to that release. Run it by hand (workflow_dispatch)
+# to test packaging: the files are then kept as a workflow artifact instead.
+
+name: Release package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  package:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PROJECT_NAME: youtube-summarizer
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.19.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Lint the extension
+        run: npx web-ext lint
+
+      - name: Work out the version
+        id: version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ($env:TAG) {
+            $label = $env:TAG
+          } else {
+            $label = "manual-$($env:GITHUB_SHA.Substring(0, 7))"
+          }
+          "label=$label" >> $env:GITHUB_OUTPUT
+          "number=$($label -replace '^v', '')" >> $env:GITHUB_OUTPUT
+
+      - name: Write the release version into the manifest
+        if: github.event_name == 'release'
+        env:
+          VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          node -e "const fs = require('fs'); const m = JSON.parse(fs.readFileSync('manifest.json', 'utf8')); m.version = process.env.VERSION; fs.writeFileSync('manifest.json', JSON.stringify(m, null, 2) + '\n');"
+          Write-Output "Manifest version set to $env:VERSION"
+
+      - name: Build the archive
+        env:
+          LABEL: ${{ steps.version.outputs.label }}
+        run: |
+          npx web-ext build --overwrite-dest --filename "$env:PROJECT_NAME-$env:LABEL.zip"
+          $zip = "web-ext-artifacts/$env:PROJECT_NAME-$env:LABEL.zip"
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $env:PROJECT_NAME-$env:LABEL.zip" | Out-File "$zip.sha256" -Encoding ascii
+          Get-ChildItem web-ext-artifacts
+
+      - name: Attach the files to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.label }}
+        run: |
+          $zip = "web-ext-artifacts/$env:PROJECT_NAME-$env:TAG.zip"
+          gh release upload "$env:TAG" "$zip" "$zip.sha256" --clobber
+
+      - name: Keep the files as a workflow artifact (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PROJECT_NAME }}-${{ steps.version.outputs.label }}
+          path: web-ext-artifacts/

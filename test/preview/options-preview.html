@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Settings page with a mock browser object, for screenshots outside Firefox.
+     Start the server with "node test/preview/serve.js", then open
+     http://localhost:8123/test/preview/options-preview.html -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YouTube Summarizer settings (preview)</title>
+  <link rel="stylesheet" href="/src/options/options.css">
+  <script src="mock-browser.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>YouTube Summarizer</h1>
+      <p class="meta">Settings <span aria-hidden="true">·</span> Version <span id="version">-</span></p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </header>
+    <div id="sections"></div>
+  </main>
+  <script>
+    // Reuse the real page markup so the preview never drifts from it.
+    const request = new XMLHttpRequest();
+    request.open("GET", "/src/options/options.html", false);
+    request.send();
+    const page = new DOMParser().parseFromString(request.responseText, "text/html");
+    document.getElementById("sections").replaceWith(...page.querySelectorAll("main > section"));
+  </script>
+  <script src="/src/options/options.js"></script>
+</body>
+</html>
