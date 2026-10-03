@@ -16,11 +16,12 @@
 
     <section aria-labelledby="instruction-heading">
       <h2 id="instruction-heading">Instruction</h2>
-      <label for="instruction" class="field-label">Text sent to Gemini before the video address</label>
+      <label for="instruction" class="field-label">Text sent to Gemini before the video address (optional)</label>
       <p class="help" id="instruction-help">
-        Gemini receives this text, an empty line, then the address of the video.
-        The default text is a placeholder stored in <code>default-instruction.txt</code>
-        at the root of the extension. Replace it here or in that file with your own instruction.
+        Leave this field empty to send only the address of the video, for example when
+        your Gemini settings already say how to summarize a link. Otherwise Gemini receives
+        this text, an empty line, then the address. The default text comes from
+        <code>default-instruction.txt</code> at the root of the extension and is empty.
       </p>
       <textarea id="instruction" rows="8" spellcheck="true" aria-describedby="instruction-help"></textarea>
       <div class="row">
