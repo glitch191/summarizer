@@ -3,6 +3,12 @@
   "name": "YouTube Summarizer",
   "version": "0.1.0",
   "description": "Adds a Summarize entry to the context menu of YouTube videos. It opens Gemini in a popup window and sends your instruction followed by the video address.",
+  "icons": {
+    "16": "icons/play.svg",
+    "32": "icons/play.svg",
+    "48": "icons/play.svg",
+    "96": "icons/play.svg"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "{9f130883-b156-4f72-84cb-8e7aa22075db}",
