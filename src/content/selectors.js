@@ -24,9 +24,17 @@ const GEMINI_SELECTORS = {
     "main textarea",
   ],
 
-  // The button that sends the prompt. Only matched when enabled.
+  // The button that sends the prompt. Only matched when enabled. It only
+  // appears once the prompt field contains text.
   sendButton: [
-    // Current Gemini layout: button with the "send" Material icon.
+    // Current Gemini layout (checked October 2026): a <button> inside a
+    // <gem-icon-button class="send-button submit">, with the "arrow_upward"
+    // Material icon.
+    '.send-button.submit button:not([disabled]):not([aria-disabled="true"])',
+    'button:has(mat-icon[fonticon="arrow_upward"]):not([disabled]):not([aria-disabled="true"])',
+    'button:has(mat-icon[data-mat-icon-name="arrow_upward"]):not([disabled]):not([aria-disabled="true"])',
+    // Earlier layouts: the button itself had the "send-button" class and the
+    // "send" Material icon.
     'button.send-button:not([disabled]):not([aria-disabled="true"])',
     'button:has(mat-icon[fonticon="send"]):not([disabled]):not([aria-disabled="true"])',
     'button:has(mat-icon[data-mat-icon-name="send"]):not([disabled]):not([aria-disabled="true"])',

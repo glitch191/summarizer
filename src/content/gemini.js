@@ -7,6 +7,8 @@
 const WAIT_TIMEOUT_MS = 15000;
 const SEND_TIMEOUT_MS = 5000;
 const BOUNDS_POLL_MS = 1000;
+const SETTLE_MS = 500;
+const INSERT_CHECK_MS = 1000;
 
 main().catch((error) => console.error("Summarize:", error));
 
@@ -20,8 +22,8 @@ async function main() {
 // ---------------------------------------------------------------- filling
 
 async function runTask({ text, sendAutomatically }) {
-  const editor = await waitFor(() => findFirst(GEMINI_SELECTORS.promptInput), WAIT_TIMEOUT_MS);
-  if (!editor) {
+  const found = await waitFor(findEditor, WAIT_TIMEOUT_MS);
+  if (!found) {
     const reason = findFirst(GEMINI_SELECTORS.signInLink)
       ? "You do not seem to be signed in to Google."
       : "The prompt field was not found within 15 seconds. The Gemini page layout may have changed.";
@@ -31,8 +33,12 @@ async function runTask({ text, sendAutomatically }) {
     return fail(text, "You do not seem to be signed in to Google. Sign in first.");
   }
 
+  // Gemini may replace the prompt field right after the page loads. Let the
+  // page settle, then look for the field again.
+  await sleep(SETTLE_MS);
+
   const lastLine = text.split("\n").pop();
-  if (!(await insertText(editor, text, lastLine))) {
+  if (!(await insertText(text, lastLine))) {
     return fail(text, "The text could not be inserted into the prompt field.");
   }
   if (!sendAutomatically) return;
@@ -43,38 +49,72 @@ async function runTask({ text, sendAutomatically }) {
     return;
   }
   // No send button found: try the Enter key, then check that the field emptied.
-  editor.dispatchEvent(
+  findEditor()?.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }),
   );
   await sleep(1000);
-  if (editorText(editor).includes(lastLine)) {
+  if (editorText(findEditor()).includes(lastLine)) {
     showBanner("The prompt is filled in, but the send button was not found. Press Enter to send it.");
   }
 }
 
-// Inserts the text the way a paste would, with a fallback for editors that
-// ignore synthetic paste events. Returns true when the text is in the field.
-async function insertText(editor, text, marker) {
-  editor.focus();
-
-  if (editor instanceof HTMLTextAreaElement) {
-    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
-    setValue.call(editor, text);
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
-    return editor.value.includes(marker);
+// Tries several ways to put the text in the prompt field, from the closest to
+// typing or pasting to a direct edit of the field. Gemini ignores synthetic
+// paste events at the time of writing, so the insertText command comes first.
+// Returns true when the text is in the field.
+async function insertText(text, marker) {
+  const strategies = [
+    ["insertText command", insertWithCommand],
+    ["paste event", pasteInto],
+    ["direct edit", writeDirectly],
+  ];
+  for (const [name, strategy] of strategies) {
+    const editor = findEditor();
+    if (!editor) return false;
+    try {
+      editor.focus();
+      strategy(editor, text);
+    } catch (error) {
+      console.warn(`Summarize: ${name} failed:`, error);
+      continue;
+    }
+    if (await waitUntil(() => editorText(findEditor()).includes(marker), INSERT_CHECK_MS)) return true;
+    console.warn(`Summarize: ${name} did not insert the text.`);
   }
+  return false;
+}
 
+function pasteInto(editor, text) {
+  if (editor instanceof HTMLTextAreaElement) return writeDirectly(editor, text);
   selectContents(editor);
   const data = new DataTransfer();
   data.setData("text/plain", text);
   editor.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-  await sleep(200);
-  if (editorText(editor).includes(marker)) return true;
+}
 
-  selectContents(editor);
+function insertWithCommand(editor, text) {
+  if (editor instanceof HTMLTextAreaElement) editor.select();
+  else selectContents(editor);
   document.execCommand("insertText", false, text);
-  await sleep(200);
-  return editorText(editor).includes(marker);
+}
+
+// Writes the text as paragraphs. The editor watches its own content and picks
+// up the change.
+function writeDirectly(editor, text) {
+  if (editor instanceof HTMLTextAreaElement) {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+    setValue.call(editor, text);
+  } else {
+    const paragraphs = text.split("\n").map((line) => {
+      const p = document.createElement("p");
+      if (line) p.textContent = line;
+      else p.append(document.createElement("br"));
+      return p;
+    });
+    editor.replaceChildren(...paragraphs);
+    placeCaretAtEnd(editor);
+  }
+  editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
 }
 
 function selectContents(element) {
@@ -85,8 +125,34 @@ function selectContents(element) {
   selection.addRange(range);
 }
 
+function placeCaretAtEnd(element) {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+// The first prompt field that is actually displayed.
+function findEditor() {
+  for (const selector of GEMINI_SELECTORS.promptInput) {
+    let matches;
+    try {
+      matches = document.querySelectorAll(selector);
+    } catch {
+      continue;
+    }
+    for (const element of matches) {
+      if (element.getClientRects().length > 0) return element;
+    }
+  }
+  return null;
+}
+
 function editorText(editor) {
-  return editor.value ?? editor.innerText ?? "";
+  if (!editor) return "";
+  return editor instanceof HTMLTextAreaElement ? editor.value : editor.innerText ?? "";
 }
 
 // ---------------------------------------------------------------- failure
@@ -124,33 +190,42 @@ function showBanner(message) {
   const host = document.createElement("div");
   host.id = "youtube-summarizer-banner";
   const root = host.attachShadow({ mode: "closed" });
-  root.innerHTML = `
-    <style>
-      .bar {
-        position: fixed; top: 8px; left: 0; right: 0; margin: 0 auto;
-        z-index: 2147483647; box-sizing: border-box;
-        width: min(640px, calc(100vw - 16px));
-        display: flex; gap: 12px; align-items: flex-start;
-        padding: 12px 16px; border: 1px solid #8a8f98; border-radius: 4px;
-        background: #ffffff; color: #1f2328;
-        font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
-      }
-      @media (prefers-color-scheme: dark) {
-        .bar { background: #24272b; color: #e6e8eb; border-color: #6b717a; }
-      }
-      p { margin: 0; flex: 1; }
-      strong { font-weight: 600; }
-      button {
-        min-height: 32px; padding: 4px 12px; border: 1px solid currentColor;
-        border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer;
-      }
-    </style>
-    <div class="bar" role="alert">
-      <p><strong>Summarize:</strong> <span></span></p>
-      <button type="button">Dismiss</button>
-    </div>`;
-  root.querySelector("span").textContent = message;
-  root.querySelector("button").addEventListener("click", () => host.remove());
+  // Built with DOM methods: Gemini enforces Trusted Types, which blocks innerHTML.
+  const style = document.createElement("style");
+  style.textContent = `
+    .bar {
+      position: fixed; top: 8px; left: 0; right: 0; margin: 0 auto;
+      z-index: 2147483647; box-sizing: border-box;
+      width: min(640px, calc(100vw - 16px));
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 16px; border: 1px solid #8a8f98; border-radius: 4px;
+      background: #ffffff; color: #1f2328;
+      font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      .bar { background: #24272b; color: #e6e8eb; border-color: #6b717a; }
+    }
+    p { margin: 0; flex: 1; }
+    strong { font-weight: 600; }
+    button {
+      min-height: 32px; padding: 4px 12px; border: 1px solid currentColor;
+      border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer;
+    }`;
+
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  bar.setAttribute("role", "alert");
+  const text = document.createElement("p");
+  const label = document.createElement("strong");
+  label.textContent = "Summarize:";
+  text.append(label, ` ${message}`);
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.textContent = "Dismiss";
+  dismiss.addEventListener("click", () => host.remove());
+  bar.append(text, dismiss);
+
+  root.append(style, bar);
   document.documentElement.append(host);
 }
 
@@ -219,6 +294,16 @@ function waitFor(find, timeoutMs) {
     }
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
   });
+}
+
+// Resolves true as soon as check() is true, or false after the timeout.
+async function waitUntil(check, timeoutMs) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    if (check()) return true;
+    await sleep(100);
+  }
+  return check();
 }
 
 function sleep(ms) {
