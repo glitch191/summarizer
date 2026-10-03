@@ -140,7 +140,7 @@ code {
   padding: 0 var(--space-1);
   border: 1px solid var(--border);
   border-radius: 3px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 textarea {
@@ -206,6 +206,37 @@ button:hover {
 
 .switch-text .help {
   margin-bottom: 0;
+}
+
+.choice-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-group legend {
+  padding: 0;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  cursor: pointer;
+}
+
+.choice input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.window-reset {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 
 /* Checkbox styled as a switch. */

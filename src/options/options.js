@@ -1,12 +1,13 @@
 // Settings page. Every change is saved immediately to storage.local.
 
-const DEFAULT_SETTINGS = { sendAutomatically: true, reuseWindow: true };
+const DEFAULT_SETTINGS = { openIn: "sidebar", sendAutomatically: true, reuseWindow: true };
 const SAVE_DELAY_MS = 300;
 
 const instructionField = document.getElementById("instruction");
 const sendSwitch = document.getElementById("send-automatically");
 const reuseSwitch = document.getElementById("reuse-window");
 const statusLine = document.getElementById("status");
+const openInChoices = document.querySelectorAll('input[name="open-in"]');
 
 let defaultInstruction = "";
 let saveTimer = null;
@@ -42,7 +43,10 @@ async function init() {
   instructionField.value = typeof stored.instruction === "string" ? stored.instruction : defaultInstruction;
   sendSwitch.checked = stored.sendAutomatically;
   reuseSwitch.checked = stored.reuseWindow;
-  requestAnimationFrame(() => document.body.classList.add("ready"));
+  for (const choice of openInChoices) choice.checked = choice.value === stored.openIn;
+  // Apply the saved states without animation, then allow transitions.
+  void document.body.offsetWidth;
+  document.body.classList.add("ready");
 
   instructionField.addEventListener("input", () => {
     clearTimeout(saveTimer);
@@ -51,6 +55,9 @@ async function init() {
 
   sendSwitch.addEventListener("change", () => save({ sendAutomatically: sendSwitch.checked }));
   reuseSwitch.addEventListener("change", () => save({ reuseWindow: reuseSwitch.checked }));
+  for (const choice of openInChoices) {
+    choice.addEventListener("change", () => save({ openIn: choice.value }));
+  }
 
   document.getElementById("reset-instruction").addEventListener("click", async () => {
     clearTimeout(saveTimer);

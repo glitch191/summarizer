@@ -1,10 +1,14 @@
 import { normalizeYouTubeUrl } from "./youtube-url.js";
 
 const GEMINI_URL = "https://gemini.google.com/app";
+// Key of the pending task for Gemini in the sidebar, which is not a tab.
+const SIDEBAR_TASK = "sidebar";
 
+// Menu ids carry the display mode ("summarize-page:sidebar"), because the
+// sidebar can only be opened synchronously inside the click handler, before
+// any stored setting could be read.
 const MENU_PAGE = "summarize-page";
 const MENU_LINK = "summarize-link";
-
 // The page entry only appears on video pages. The link entry only appears on
 // links whose target is a video.
 const VIDEO_PAGE_PATTERNS = [
@@ -20,7 +24,7 @@ const VIDEO_LINK_PATTERNS = [
   "*://m.youtube.com/shorts/*",
 ];
 
-const DEFAULT_SETTINGS = { sendAutomatically: true, reuseWindow: true };
+const DEFAULT_SETTINGS = { openIn: "sidebar", sendAutomatically: true, reuseWindow: true };
 const DEFAULT_SIZE = { width: 720, height: 900 };
 const MIN_SIZE = { width: 400, height: 300 };
 // How much of the window must overlap the screen to count as visible.
@@ -28,38 +32,45 @@ const MIN_VISIBLE = 100;
 
 // Session data (survives the background page being unloaded, not a restart):
 //   popupWindowIds: ids of popup windows opened by the extension, newest last
-//   pendingTasks: { [tabId]: { text, sendAutomatically } }
+//   pendingTasks: { [tabId or "sidebar"]: { text, sendAutomatically } }
 
-function createMenus() {
-  browser.contextMenus.removeAll().then(() => {
-    browser.contextMenus.create({
-      id: MENU_PAGE,
-      title: "Summarize",
-      contexts: ["page", "video"],
-      documentUrlPatterns: VIDEO_PAGE_PATTERNS,
-    });
-    browser.contextMenus.create({
-      id: MENU_LINK,
-      title: "Summarize",
-      contexts: ["link"],
-      targetUrlPatterns: VIDEO_LINK_PATTERNS,
-    });
+async function createMenus() {
+  const { openIn } = await browser.storage.local.get({ openIn: DEFAULT_SETTINGS.openIn });
+  await browser.contextMenus.removeAll();
+  browser.contextMenus.create({
+    id: `${MENU_PAGE}:${openIn}`,
+    title: "Summarize",
+    contexts: ["page", "video"],
+    documentUrlPatterns: VIDEO_PAGE_PATTERNS,
+  });
+  browser.contextMenus.create({
+    id: `${MENU_LINK}:${openIn}`,
+    title: "Summarize",
+    contexts: ["link"],
+    targetUrlPatterns: VIDEO_LINK_PATTERNS,
   });
 }
 
 browser.runtime.onInstalled.addListener(createMenus);
 browser.runtime.onStartup.addListener(createMenus);
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && "openIn" in changes) createMenus();
+});
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
-  const source = info.menuItemId === MENU_LINK ? info.linkUrl : info.pageUrl || tab?.url;
+  const [menu, openIn] = String(info.menuItemId).split(":");
+  // Must run before anything asynchronous: Firefox only lets an extension
+  // open its sidebar while handling a user action.
+  if (openIn === "sidebar") browser.sidebarAction.open();
+
+  const source = menu === MENU_LINK ? info.linkUrl : info.pageUrl || tab?.url;
   const videoUrl = normalizeYouTubeUrl(source);
   if (!videoUrl) {
     console.warn("Summarize: not a YouTube video address:", source);
     return;
   }
-  summarize(videoUrl).catch((error) => console.error("Summarize failed:", error));
+  summarize(videoUrl, openIn, tab?.windowId).catch((error) => console.error("Summarize failed:", error));
 });
-
 async function getInstruction() {
   const { instruction } = await browser.storage.local.get("instruction");
   if (typeof instruction === "string") return instruction;
@@ -67,17 +78,25 @@ async function getInstruction() {
   return (await response.text()).trim();
 }
 
-async function summarize(videoUrl) {
+async function summarize(videoUrl, openIn, windowId) {
   const stored = await browser.storage.local.get(DEFAULT_SETTINGS);
   const instruction = (await getInstruction()).trim();
   const text = instruction ? `${instruction}\n\n${videoUrl}` : videoUrl;
+  const task = { text, sendAutomatically: stored.sendAutomatically };
+
+  if (openIn === "sidebar") {
+    // Store the task before Gemini loads so the content script always finds it.
+    await setPendingTask(SIDEBAR_TASK, task);
+    // A new address each time makes the sidebar load a new conversation.
+    const panel = `${GEMINI_URL}?ys=${Date.now()}`;
+    await browser.sidebarAction.setPanel(windowId === undefined ? { panel } : { windowId, panel });
+    return;
+  }
 
   const tabId = await openPopupTab(stored.reuseWindow);
-  // Store the task before Gemini loads so the content script always finds it.
-  await setPendingTask(tabId, { text, sendAutomatically: stored.sendAutomatically });
+  await setPendingTask(tabId, task);
   await browser.tabs.update(tabId, { url: GEMINI_URL });
 }
-
 // Returns the id of a tab in a popup window, ready to be navigated to Gemini.
 async function openPopupTab(reuseWindow) {
   if (reuseWindow) {
@@ -189,7 +208,13 @@ async function saveBounds(windowId, bounds) {
 // Messages from the content script running in Gemini tabs.
 browser.runtime.onMessage.addListener((message, sender) => {
   const tab = sender.tab;
-  if (!tab) return undefined;
+  if (!tab || tab.id === browser.tabs.TAB_ID_NONE) {
+    // Gemini in the sidebar: it is not a tab and has no window to track.
+    if (message?.type === "getTask") {
+      return takePendingTask(SIDEBAR_TASK).then((task) => ({ task, isPopup: false }));
+    }
+    return undefined;
+  }
 
   switch (message?.type) {
     case "getTask":

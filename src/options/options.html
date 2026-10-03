@@ -28,6 +28,22 @@
       </div>
     </section>
 
+    <section aria-labelledby="display-heading">
+      <h2 id="display-heading">Display</h2>
+      <fieldset class="choice-group" aria-describedby="open-in-help">
+        <legend class="field-label">Open Gemini in</legend>
+        <p class="help" id="open-in-help">The sidebar uses the same place as the Firefox sidebar. Drag its edge to make it wider.</p>
+        <label class="choice">
+          <input type="radio" name="open-in" value="sidebar">
+          <span>Sidebar</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="open-in" value="popup">
+          <span>Popup window</span>
+        </label>
+      </fieldset>
+    </section>
+
     <section aria-labelledby="behavior-heading">
       <h2 id="behavior-heading">Behavior</h2>
 
@@ -38,6 +54,11 @@
         </div>
         <input type="checkbox" role="switch" id="send-automatically" aria-describedby="send-help">
       </div>
+    </section>
+
+    <section aria-labelledby="window-heading">
+      <h2 id="window-heading">Popup window</h2>
+      <p class="help">These settings apply only when Gemini opens in a popup window.</p>
 
       <div class="switch-row">
         <div class="switch-text">
@@ -46,16 +67,14 @@
         </div>
         <input type="checkbox" role="switch" id="reuse-window" aria-describedby="reuse-help">
       </div>
-    </section>
 
-    <section aria-labelledby="window-heading">
-      <h2 id="window-heading">Window</h2>
-      <p class="help">The size and position of the Gemini popup window are saved when you resize or move it.</p>
-      <div class="row">
-        <button type="button" id="reset-window">Reset window size and position</button>
+      <div class="window-reset">
+        <p class="help">The size and position of the popup window are saved when you resize or move it.</p>
+        <div class="row">
+          <button type="button" id="reset-window">Reset window size and position</button>
+        </div>
       </div>
     </section>
-
   </main>
   <script src="options.js"></script>
 </body>
