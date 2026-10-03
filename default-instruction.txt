@@ -1,0 +1,1 @@
+Provide an elaborate summary of that video in the same language as the video. Do not use bullet points nor timestamps.
