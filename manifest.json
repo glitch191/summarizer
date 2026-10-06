@@ -4,10 +4,10 @@
   "version": "0.2.0",
   "description": "Adds a Summarize entry to the context menu of pages and links. It opens Gemini and sends the address, preceded by your instruction for YouTube videos.",
   "icons": {
-    "16": "icons/play.svg",
-    "32": "icons/play.svg",
-    "48": "icons/play.svg",
-    "96": "icons/play.svg"
+    "16": "icons/summarize.svg",
+    "32": "icons/summarize.svg",
+    "48": "icons/summarize.svg",
+    "96": "icons/summarize.svg"
   },
   "browser_specific_settings": {
     "gecko": {
@@ -34,7 +34,7 @@
   "sidebar_action": {
     "default_title": "Summarizer",
     "default_panel": "src/sidebar/sidebar.html",
-    "default_icon": "icons/play.svg",
+    "default_icon": "icons/summarize.svg",
     "open_at_install": false
   },
   "options_ui": {
