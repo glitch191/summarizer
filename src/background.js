@@ -2,6 +2,9 @@ import { buildRequest } from "./prompt.js";
 import { normalizeYouTubeUrl } from "./youtube-url.js";
 
 const GEMINI_URL = "https://gemini.google.com/app";
+// Firefox lets the user withhold this host permission. Without it the content
+// script is not injected and nothing gets filled in.
+const GEMINI_ACCESS = { origins: ["https://gemini.google.com/*"] };
 // Key of the pending task for Gemini in the sidebar, which is not a tab.
 const SIDEBAR_TASK = "sidebar";
 
@@ -96,6 +99,11 @@ function extractPageText() {
 }
 
 async function summarize(source, openIn, windowId, sourceTabId) {
+  if (!(await browser.permissions.contains(GEMINI_ACCESS))) {
+    console.warn("Summarize: access to gemini.google.com is not granted.");
+    await browser.runtime.openOptionsPage();
+    return;
+  }
   const stored = await browser.storage.local.get(DEFAULT_SETTINGS);
   const isVideo = normalizeYouTubeUrl(source) !== null;
   const request = buildRequest({

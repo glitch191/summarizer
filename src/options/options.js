@@ -14,6 +14,9 @@ const reuseSwitch = document.getElementById("reuse-window");
 const statusLine = document.getElementById("status");
 const openInChoices = document.querySelectorAll('input[name="open-in"]');
 
+const GEMINI_ACCESS = { origins: ["https://gemini.google.com/*"] };
+const accessSection = document.getElementById("access");
+
 let statusTimer = null;
 
 async function loadDefault(file) {
@@ -59,8 +62,28 @@ async function setUpInstruction({ key, field, file }, stored) {
   });
 }
 
+// Shows a warning with a button when Firefox withholds access to Gemini.
+async function setUpAccessCheck() {
+  const refresh = async () => {
+    accessSection.hidden = await browser.permissions.contains(GEMINI_ACCESS);
+  };
+  document.getElementById("grant-access").addEventListener("click", async () => {
+    try {
+      const granted = await browser.permissions.request(GEMINI_ACCESS);
+      showStatus(granted ? "Access to gemini.google.com allowed" : "Access was not allowed. Click the button again and choose Allow.", !granted);
+    } catch (error) {
+      showStatus(`Could not request access: ${error.message}`, true);
+    }
+    await refresh();
+  });
+  browser.permissions.onAdded.addListener(refresh);
+  browser.permissions.onRemoved.addListener(refresh);
+  await refresh();
+}
+
 async function init() {
   document.getElementById("version").textContent = browser.runtime.getManifest().version;
+  await setUpAccessCheck();
 
   const stored = await browser.storage.local.get({ ...DEFAULT_SETTINGS, instruction: null, pageInstruction: null });
   await Promise.all(INSTRUCTIONS.map((instruction) => setUpInstruction(instruction, stored)));

@@ -14,6 +14,17 @@
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </header>
 
+    <section id="access" class="warning" aria-labelledby="access-heading" hidden>
+      <h2 id="access-heading">Access to Gemini is off</h2>
+      <p class="help">
+        Firefox does not let the extension work on gemini.google.com, so the prompt cannot be
+        filled in. Allow access, then use Summarize again.
+      </p>
+      <div class="row">
+        <button type="button" id="grant-access">Allow access to gemini.google.com</button>
+      </div>
+    </section>
+
     <section aria-labelledby="instruction-heading">
       <h2 id="instruction-heading">Instructions</h2>
 

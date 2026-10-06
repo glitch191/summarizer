@@ -9,7 +9,17 @@
 
   const data = {};
 
+  // Set ?access=off in the address to preview the missing permission warning.
+  let geminiAccess = new URLSearchParams(location.search).get("access") !== "off";
+  const noop = { addListener() {} };
+
   window.browser = {
+    permissions: {
+      contains: async () => geminiAccess,
+      request: async () => (geminiAccess = true),
+      onAdded: noop,
+      onRemoved: noop,
+    },
     runtime: {
       getURL: (path) => `/${path}`,
       getManifest: () => manifest,

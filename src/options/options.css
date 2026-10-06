@@ -11,6 +11,7 @@
   --accent-text: #ffffff;
   --focus: #0b5cad;
   --switch-off: #8c959f;
+  --warning-border: #b54708;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -33,6 +34,7 @@
     --accent-text: #0d1117;
     --focus: #6cb0f5;
     --switch-off: #6b727b;
+    --warning-border: #f0a050;
   }
 }
 
@@ -120,6 +122,11 @@ h2 {
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.3;
+}
+
+section.warning {
+  border-color: var(--warning-border);
+  border-left-width: 4px;
 }
 
 .field-label {
