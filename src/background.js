@@ -1,4 +1,4 @@
-import { normalizeYouTubeUrl } from "./youtube-url.js";
+import { buildPrompt } from "./prompt.js";
 
 const GEMINI_URL = "https://gemini.google.com/app";
 // Key of the pending task for Gemini in the sidebar, which is not a tab.
@@ -9,20 +9,9 @@ const SIDEBAR_TASK = "sidebar";
 // any stored setting could be read.
 const MENU_PAGE = "summarize-page";
 const MENU_LINK = "summarize-link";
-// The page entry only appears on video pages. The link entry only appears on
-// links whose target is a video.
-const VIDEO_PAGE_PATTERNS = [
-  "*://www.youtube.com/watch*",
-  "*://youtube.com/watch*",
-  "*://m.youtube.com/watch*",
-];
-const VIDEO_LINK_PATTERNS = [
-  ...VIDEO_PAGE_PATTERNS,
-  "*://youtu.be/*",
-  "*://www.youtube.com/shorts/*",
-  "*://youtube.com/shorts/*",
-  "*://m.youtube.com/shorts/*",
-];
+
+// Summarize appears on every web page and on every link to a web page.
+const WEB_PATTERNS = ["http://*/*", "https://*/*"];
 
 const DEFAULT_SETTINGS = { openIn: "sidebar", sendAutomatically: true, reuseWindow: true };
 const DEFAULT_SIZE = { width: 720, height: 900 };
@@ -41,13 +30,13 @@ async function createMenus() {
     id: `${MENU_PAGE}:${openIn}`,
     title: "Summarize",
     contexts: ["page", "video"],
-    documentUrlPatterns: VIDEO_PAGE_PATTERNS,
+    documentUrlPatterns: WEB_PATTERNS,
   });
   browser.contextMenus.create({
     id: `${MENU_LINK}:${openIn}`,
     title: "Summarize",
     contexts: ["link"],
-    targetUrlPatterns: VIDEO_LINK_PATTERNS,
+    targetUrlPatterns: WEB_PATTERNS,
   });
 }
 
@@ -64,13 +53,9 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
   if (openIn === "sidebar") browser.sidebarAction.open();
 
   const source = menu === MENU_LINK ? info.linkUrl : info.pageUrl || tab?.url;
-  const videoUrl = normalizeYouTubeUrl(source);
-  if (!videoUrl) {
-    console.warn("Summarize: not a YouTube video address:", source);
-    return;
-  }
-  summarize(videoUrl, openIn, tab?.windowId).catch((error) => console.error("Summarize failed:", error));
+  summarize(source, openIn, tab?.windowId).catch((error) => console.error("Summarize failed:", error));
 });
+
 async function getInstruction() {
   const { instruction } = await browser.storage.local.get("instruction");
   if (typeof instruction === "string") return instruction;
@@ -78,11 +63,14 @@ async function getInstruction() {
   return (await response.text()).trim();
 }
 
-async function summarize(videoUrl, openIn, windowId) {
+async function summarize(source, openIn, windowId) {
   const stored = await browser.storage.local.get(DEFAULT_SETTINGS);
-  const instruction = (await getInstruction()).trim();
-  const text = instruction ? `${instruction}\n\n${videoUrl}` : videoUrl;
-  const task = { text, sendAutomatically: stored.sendAutomatically };
+  const text = buildPrompt(source, await getInstruction());
+  if (!text) {
+    console.warn("Summarize: not a web page address:", source);
+    return;
+  }
+  const task ={ text, sendAutomatically: stored.sendAutomatically };
 
   if (openIn === "sidebar") {
     // Store the task before Gemini loads so the content script always finds it.
@@ -97,6 +85,7 @@ async function summarize(videoUrl, openIn, windowId) {
   await setPendingTask(tabId, task);
   await browser.tabs.update(tabId, { url: GEMINI_URL });
 }
+
 // Returns the id of a tab in a popup window, ready to be navigated to Gemini.
 async function openPopupTab(reuseWindow) {
   if (reuseWindow) {

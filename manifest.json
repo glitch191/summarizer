@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Summarizer",
-  "version": "0.1.0",
-  "description": "Adds a Summarize entry to the context menu of YouTube videos. It opens Gemini in a popup window and sends your instruction followed by the video address.",
+  "version": "0.2.0",
+  "description": "Adds a Summarize entry to the context menu of pages and links. It opens Gemini and sends the address, preceded by your instruction for YouTube videos.",
   "icons": {
     "16": "icons/play.svg",
     "32": "icons/play.svg",
