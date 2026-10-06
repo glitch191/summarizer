@@ -3,18 +3,21 @@
 const DEFAULT_SETTINGS = { openIn: "sidebar", sendAutomatically: true, reuseWindow: true };
 const SAVE_DELAY_MS = 300;
 
-const instructionField = document.getElementById("instruction");
+// Instruction fields: storage key, text field and default file.
+const INSTRUCTIONS = [
+  { key: "instruction", field: document.getElementById("instruction"), file: "default-instruction.txt" },
+  { key: "pageInstruction", field: document.getElementById("page-instruction"), file: "default-page-instruction.txt" },
+];
+
 const sendSwitch = document.getElementById("send-automatically");
 const reuseSwitch = document.getElementById("reuse-window");
 const statusLine = document.getElementById("status");
 const openInChoices = document.querySelectorAll('input[name="open-in"]');
 
-let defaultInstruction = "";
-let saveTimer = null;
 let statusTimer = null;
 
-async function loadDefaultInstruction() {
-  const response = await fetch(browser.runtime.getURL("default-instruction.txt"));
+async function loadDefault(file) {
+  const response = await fetch(browser.runtime.getURL(file));
   return (await response.text()).trim();
 }
 
@@ -34,13 +37,34 @@ async function save(values, message = "Saved") {
   }
 }
 
+async function setUpInstruction({ key, field, file }, stored) {
+  const defaultText = await loadDefault(file);
+  field.value = typeof stored[key] === "string" ? stored[key] : defaultText;
+
+  let saveTimer = null;
+  field.addEventListener("input", () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => save({ [key]: field.value }), SAVE_DELAY_MS);
+  });
+
+  document.querySelector(`button[data-key="${key}"]`).addEventListener("click", async () => {
+    clearTimeout(saveTimer);
+    field.value = defaultText;
+    try {
+      await browser.storage.local.remove(key);
+      showStatus("Instruction reset to default");
+    } catch (error) {
+      showStatus(`Could not reset the instruction: ${error.message}`, true);
+    }
+  });
+}
+
 async function init() {
   document.getElementById("version").textContent = browser.runtime.getManifest().version;
 
-  defaultInstruction = await loadDefaultInstruction();
-  const stored = await browser.storage.local.get({ ...DEFAULT_SETTINGS, instruction: null });
+  const stored = await browser.storage.local.get({ ...DEFAULT_SETTINGS, instruction: null, pageInstruction: null });
+  await Promise.all(INSTRUCTIONS.map((instruction) => setUpInstruction(instruction, stored)));
 
-  instructionField.value = typeof stored.instruction === "string" ? stored.instruction : defaultInstruction;
   sendSwitch.checked = stored.sendAutomatically;
   reuseSwitch.checked = stored.reuseWindow;
   for (const choice of openInChoices) choice.checked = choice.value === stored.openIn;
@@ -48,27 +72,11 @@ async function init() {
   void document.body.offsetWidth;
   document.body.classList.add("ready");
 
-  instructionField.addEventListener("input", () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => save({ instruction: instructionField.value }), SAVE_DELAY_MS);
-  });
-
   sendSwitch.addEventListener("change", () => save({ sendAutomatically: sendSwitch.checked }));
   reuseSwitch.addEventListener("change", () => save({ reuseWindow: reuseSwitch.checked }));
   for (const choice of openInChoices) {
     choice.addEventListener("change", () => save({ openIn: choice.value }));
   }
-
-  document.getElementById("reset-instruction").addEventListener("click", async () => {
-    clearTimeout(saveTimer);
-    instructionField.value = defaultInstruction;
-    try {
-      await browser.storage.local.remove("instruction");
-      showStatus("Instruction reset to default");
-    } catch (error) {
-      showStatus(`Could not reset the instruction: ${error.message}`, true);
-    }
-  });
 
   document.getElementById("reset-window").addEventListener("click", async () => {
     try {

@@ -146,7 +146,7 @@ code {
 textarea {
   display: block;
   width: 100%;
-  min-height: 10rem;
+  min-height: 6rem;
   padding: var(--space-2) var(--space-3);
   background: var(--surface);
   color: var(--text);
@@ -206,6 +206,12 @@ button:hover {
 
 .switch-text .help {
   margin-bottom: 0;
+}
+
+.instruction-field + .instruction-field {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border);
 }
 
 .choice-group {

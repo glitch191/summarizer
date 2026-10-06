@@ -20,7 +20,7 @@ jobs:
       run:
         shell: pwsh
     env:
-      PROJECT_NAME: youtube-summarizer
+      PROJECT_NAME: summarizer
     steps:
       - name: Check out the code
         uses: actions/checkout@v7

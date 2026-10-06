@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Summarizer",
+  "name": "Summarizer",
   "version": "0.2.0",
   "description": "Adds a Summarize entry to the context menu of pages and links. It opens Gemini and sends the address, preceded by your instruction for YouTube videos.",
   "icons": {
@@ -18,7 +18,7 @@
       }
     }
   },
-  "permissions": ["contextMenus", "storage", "clipboardWrite"],
+  "permissions": ["contextMenus", "storage", "clipboardWrite", "activeTab", "scripting"],
   "host_permissions": ["https://gemini.google.com/*"],
   "background": {
     "scripts": ["src/background.js"],
@@ -32,7 +32,7 @@
     }
   ],
   "sidebar_action": {
-    "default_title": "YouTube Summarizer",
+    "default_title": "Summarizer",
     "default_panel": "src/sidebar/sidebar.html",
     "default_icon": "icons/play.svg",
     "open_at_install": false

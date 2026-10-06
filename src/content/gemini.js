@@ -8,7 +8,9 @@ const WAIT_TIMEOUT_MS = 15000;
 const SEND_TIMEOUT_MS = 5000;
 const BOUNDS_POLL_MS = 1000;
 const SETTLE_MS = 500;
-const INSERT_CHECK_MS = 1000;
+const INSERT_CHECK_MS = 2000;
+const DROP_ATTEMPTS = 10;
+const UPLOAD_TIMEOUT_MS = 30000;
 
 main().catch((error) => console.error("Summarize:", error));
 
@@ -21,23 +23,31 @@ async function main() {
 
 // ---------------------------------------------------------------- filling
 
-async function runTask({ text, sendAutomatically }) {
+async function runTask({ text, attachment, fallbackText, sendAutomatically }) {
   const found = await waitFor(findEditor, WAIT_TIMEOUT_MS);
   if (!found) {
     const reason = findFirst(GEMINI_SELECTORS.signInLink)
       ? "You do not seem to be signed in to Google."
       : "The prompt field was not found within 15 seconds. The Gemini page layout may have changed.";
-    return fail(text, reason);
+    return fail(fallbackText ?? text, reason);
   }
   if (findFirst(GEMINI_SELECTORS.signInLink)) {
-    return fail(text, "You do not seem to be signed in to Google. Sign in first.");
+    return fail(fallbackText ?? text, "You do not seem to be signed in to Google. Sign in first.");
   }
 
   // Gemini may replace the prompt field right after the page loads. Let the
   // page settle, then look for the field again.
   await sleep(SETTLE_MS);
 
-  const lastLine = text.split("\n").pop();
+  // Long page text goes in an attached file. If the file cannot be attached,
+  // send the text cut to fit the prompt field instead.
+  if (attachment && !(await attachFile(attachment))) {
+    console.warn("Summarize: the page text could not be attached as a file.");
+    text = fallbackText;
+    showBanner("The page text could not be attached as a file, so it was cut to fit the prompt field.");
+  }
+  // A short piece of the last line is enough to check that the text arrived.
+  const lastLine = text.trim().split("\n").pop().trim().slice(0, 60);
   if (!(await insertText(text, lastLine))) {
     return fail(text, "The text could not be inserted into the prompt field.");
   }
@@ -155,6 +165,48 @@ function editorText(editor) {
   return editor instanceof HTMLTextAreaElement ? editor.value : editor.innerText ?? "";
 }
 
+// ---------------------------------------------------------------- attaching
+
+// Attaches a text file by simulating a drop on the prompt area, then waits for
+// the upload to end. Returns true when the file name shows up on the page.
+async function attachFile({ name, content }) {
+  const attached = () => document.body.innerText.includes(name);
+  for (let attempt = 0; attempt < DROP_ATTEMPTS && !attached(); attempt++) {
+    const target = findFirst(GEMINI_SELECTORS.dropZone) ?? findEditor();
+    if (target) {
+      try {
+        dropFile(target, name, content);
+      } catch (error) {
+        console.warn("Summarize: file drop failed:", error);
+      }
+    }
+    if (await waitUntil(attached, 1000)) break;
+  }
+  if (!attached()) return false;
+
+  // Wait for the upload indicator to appear, then to go away.
+  const uploading = () => findFirst(GEMINI_SELECTORS.attachmentLoading) !== null;
+  if (await waitUntil(uploading, 2000)) await waitUntil(() => !uploading(), UPLOAD_TIMEOUT_MS);
+  return true;
+}
+
+// Firefox isolates content scripts from the page: a File built here is not
+// readable by the page's drop handler. Build the File, DataTransfer and events
+// with the page's own constructors (window.wrappedJSObject) so it is.
+function dropFile(target, name, content) {
+  const page = window.wrappedJSObject ?? window;
+  const clone = typeof cloneInto === "function" ? cloneInto : (value) => value;
+  const file = new page.File(clone([content], window), name, clone({ type: "text/plain" }, window));
+  const dataTransfer = new page.DataTransfer();
+  dataTransfer.items.add(file);
+  const init = clone({ bubbles: true, cancelable: true, composed: true, dataTransfer }, window, {
+    wrapReflectors: true,
+  });
+  for (const type of ["dragenter", "dragover", "drop"]) {
+    target.dispatchEvent(new page.DragEvent(type, init));
+  }
+}
+
 // ---------------------------------------------------------------- failure
 
 async function fail(text, reason) {
@@ -185,10 +237,10 @@ async function copyToClipboard(text) {
 
 // A plain notice at the top of the page, isolated from Gemini styles.
 function showBanner(message) {
-  document.getElementById("youtube-summarizer-banner")?.remove();
+  document.getElementById("summarizer-banner")?.remove();
 
   const host = document.createElement("div");
-  host.id = "youtube-summarizer-banner";
+  host.id = "summarizer-banner";
   const root = host.attachShadow({ mode: "closed" });
   // Built with DOM methods: Gemini enforces Trusted Types, which blocks innerHTML.
   const style = document.createElement("style");

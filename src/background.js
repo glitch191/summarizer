@@ -1,4 +1,5 @@
-import { buildPrompt } from "./prompt.js";
+import { buildRequest } from "./prompt.js";
+import { normalizeYouTubeUrl } from "./youtube-url.js";
 
 const GEMINI_URL = "https://gemini.google.com/app";
 // Key of the pending task for Gemini in the sidebar, which is not a tab.
@@ -21,7 +22,7 @@ const MIN_VISIBLE = 100;
 
 // Session data (survives the background page being unloaded, not a restart):
 //   popupWindowIds: ids of popup windows opened by the extension, newest last
-//   pendingTasks: { [tabId or "sidebar"]: { text, sendAutomatically } }
+//   pendingTasks: { [tabId or "sidebar"]: { text, attachment?, fallbackText?, sendAutomatically } }
 
 async function createMenus() {
   const { openIn } = await browser.storage.local.get({ openIn: DEFAULT_SETTINGS.openIn });
@@ -53,24 +54,61 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
   if (openIn === "sidebar") browser.sidebarAction.open();
 
   const source = menu === MENU_LINK ? info.linkUrl : info.pageUrl || tab?.url;
-  summarize(source, openIn, tab?.windowId).catch((error) => console.error("Summarize failed:", error));
+  // Page text can only be read from the page itself, not from a link target.
+  const tabId = menu === MENU_PAGE ? tab?.id : undefined;
+  summarize(source, openIn, tab?.windowId, tabId).catch((error) => console.error("Summarize failed:", error));
 });
 
-async function getInstruction() {
-  const { instruction } = await browser.storage.local.get("instruction");
-  if (typeof instruction === "string") return instruction;
-  const response = await fetch(browser.runtime.getURL("default-instruction.txt"));
+// Instructions saved in the settings, or the defaults shipped with the extension.
+const INSTRUCTIONS = {
+  instruction: "default-instruction.txt",
+  pageInstruction: "default-page-instruction.txt",
+};
+
+async function getInstruction(key) {
+  const stored = (await browser.storage.local.get(key))[key];
+  if (typeof stored === "string") return stored;
+  const response = await fetch(browser.runtime.getURL(INSTRUCTIONS[key]));
   return (await response.text()).trim();
 }
 
-async function summarize(source, openIn, windowId) {
+// Reads the title and visible text of the page in the given tab. The click on
+// the menu entry grants temporary access to that tab (activeTab). Returns null
+// when the page cannot be read (for example a Firefox page or a PDF).
+async function readPage(tabId) {
+  if (tabId === undefined) return null;
+  try {
+    const [result] = await browser.scripting.executeScript({ target: { tabId }, func: extractPageText });
+    return result?.result ?? null;
+  } catch (error) {
+    console.warn("Summarize: could not read the page:", error);
+    return null;
+  }
+}
+
+// Runs inside the page. Prefers the main article over menus and footers.
+function extractPageText() {
+  if (!document.body) return { title: document.title, text: "" };
+  const main = [document.querySelector("article"), document.querySelector("main, [role='main']")].find(
+    (element) => element && element.innerText.trim().length > 500,
+  );
+  return { title: document.title, text: (main ?? document.body).innerText };
+}
+
+async function summarize(source, openIn, windowId, sourceTabId) {
   const stored = await browser.storage.local.get(DEFAULT_SETTINGS);
-  const text = buildPrompt(source, await getInstruction());
-  if (!text) {
+  const isVideo = normalizeYouTubeUrl(source) !== null;
+  const request = buildRequest({
+    address: source,
+    videoInstruction: await getInstruction("instruction"),
+    pageInstruction: await getInstruction("pageInstruction"),
+    page: isVideo ? null : await readPage(sourceTabId),
+  });
+  if (!request) {
     console.warn("Summarize: not a web page address:", source);
     return;
   }
-  const task ={ text, sendAutomatically: stored.sendAutomatically };
+  const task = { ...request, sendAutomatically: stored.sendAutomatically };
 
   if (openIn === "sidebar") {
     // Store the task before Gemini loads so the content script always finds it.

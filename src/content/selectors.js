@@ -42,6 +42,21 @@ const GEMINI_SELECTORS = {
     'button[aria-label^="Send" i]:not([disabled]):not([aria-disabled="true"])',
   ],
 
+  // Where a file can be dropped to attach it to the prompt. The prompt field
+  // itself is tried after these.
+  dropZone: [
+    // Current Gemini layout (checked October 2026).
+    ".xap-uploader-dropzone",
+    "rich-textarea",
+  ],
+
+  // Signs that an attached file is still uploading. Sending before the upload
+  // ends would send the prompt without the file.
+  attachmentLoading: [
+    ".gem-attachment-content.loading",
+    'mat-spinner[aria-label*="attachment" i]',
+  ],
+
   // Signs that the Google account is not signed in on the Gemini page.
   signInLink: [
     'a[href*="accounts.google.com/ServiceLogin"]',

@@ -3,32 +3,46 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YouTube Summarizer settings</title>
+  <title>Summarizer settings</title>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <main>
     <header>
-      <h1>YouTube Summarizer</h1>
+      <h1>Summarizer</h1>
       <p class="meta">Settings <span aria-hidden="true">·</span> Version <span id="version">-</span></p>
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </header>
 
     <section aria-labelledby="instruction-heading">
-      <h2 id="instruction-heading">Instruction</h2>
-      <label for="instruction" class="field-label">Text sent to Gemini before a YouTube video address (optional)</label>
-      <p class="help" id="instruction-help">
-        For a YouTube video, Gemini receives this text, an empty line, then the address of the
-        video. Leave the field empty to send only the address. For any other page or link,
-        Gemini receives only its address. The default text comes from
-        <code>default-instruction.txt</code> at the root of the extension.
-      </p>
-      <textarea id="instruction" rows="8" spellcheck="true" aria-describedby="instruction-help"></textarea>
-      <div class="row">
-        <button type="button" id="reset-instruction">Reset instruction to default</button>
+      <h2 id="instruction-heading">Instructions</h2>
+
+      <div class="instruction-field">
+        <label for="instruction" class="field-label">YouTube videos</label>
+        <p class="help" id="instruction-help">
+          Gemini receives this text, an empty line, then the address of the video. Leave the
+          field empty to send only the address. Default text: <code>default-instruction.txt</code>.
+        </p>
+        <textarea id="instruction" rows="4" spellcheck="true" aria-describedby="instruction-help"></textarea>
+        <div class="row">
+          <button type="button" id="reset-instruction" data-key="instruction">Reset to default</button>
+        </div>
+      </div>
+
+      <div class="instruction-field">
+        <label for="page-instruction" class="field-label">Other pages and links</label>
+        <p class="help" id="page-instruction-help">
+          Gemini receives this text, the address, then the title and text of the page. The text is
+          read from the page you right-click; for a link, Gemini receives only the address. Page
+          text longer than 30,000 characters is attached as a file named <code>page-content.txt</code>.
+          Default text: <code>default-page-instruction.txt</code>.
+        </p>
+        <textarea id="page-instruction" rows="4" spellcheck="true" aria-describedby="page-instruction-help"></textarea>
+        <div class="row">
+          <button type="button" id="reset-page-instruction" data-key="pageInstruction">Reset to default</button>
+        </div>
       </div>
     </section>
-
     <section aria-labelledby="display-heading">
       <h2 id="display-heading">Display</h2>
       <fieldset class="choice-group" aria-describedby="open-in-help">
