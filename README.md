@@ -163,4 +163,4 @@ web-ext-config.mjs             web-ext settings and files left out of the packag
 
 ## License
 
-The license has not been chosen yet. Until a license is added, all rights are reserved by the author.
+Released under the [MIT License](LICENSE).
