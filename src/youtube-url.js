@@ -1,9 +1,14 @@
 // Turns any supported YouTube video address into the canonical form
 // https://www.youtube.com/watch?v=<id>, dropping playlist, time and tracking
-// parameters. Returns null when the address is not a YouTube video.
+// parameters. Embedded players (/embed/<id>, including the privacy-enhanced
+// youtube-nocookie.com) are supported too. Returns null when the address is
+// not a YouTube video.
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
+const EMBED_HOSTS = new Set([...YOUTUBE_HOSTS, "youtube-nocookie.com", "www.youtube-nocookie.com"]);
+// Embedded playlists use /embed/videoseries?list=..., which is not a video.
+const PLAYLIST_EMBED = "videoseries";
 
 export function normalizeYouTubeUrl(input) {
   if (typeof input !== "string") return null;
@@ -21,15 +26,17 @@ export function normalizeYouTubeUrl(input) {
 
   if (host === "youtu.be") {
     id = url.pathname.split("/")[1];
-  } else if (YOUTUBE_HOSTS.has(host)) {
+  } else if (EMBED_HOSTS.has(host)) {
     const parts = url.pathname.split("/");
-    if (url.pathname === "/watch" || url.pathname === "/watch/") {
+    if (parts[1] === "embed") {
+      id = parts[2];
+    } else if (YOUTUBE_HOSTS.has(host) && (url.pathname === "/watch" || url.pathname === "/watch/")) {
       id = url.searchParams.get("v");
-    } else if (parts[1] === "shorts") {
+    } else if (YOUTUBE_HOSTS.has(host) && parts[1] === "shorts") {
       id = parts[2];
     }
   }
 
-  if (!id || !VIDEO_ID.test(id)) return null;
+  if (!id || id === PLAYLIST_EMBED || !VIDEO_ID.test(id)) return null;
   return `https://www.youtube.com/watch?v=${id}`;
 }
