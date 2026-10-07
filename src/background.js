@@ -56,7 +56,10 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
   // open its sidebar while handling a user action.
   if (openIn === "sidebar") browser.sidebarAction.open();
 
-  const source = menu === MENU_LINK ? info.linkUrl : info.pageUrl || tab?.url;
+  // A right-click inside an embedded YouTube player (an iframe) targets the
+  // video, not the page that embeds it.
+  const embeddedVideo = menu === MENU_PAGE ? normalizeYouTubeUrl(info.frameUrl) : null;
+  const source = menu === MENU_LINK ? info.linkUrl : embeddedVideo || info.pageUrl || tab?.url;
   // Page text can only be read from the page itself, not from a link target.
   const tabId = menu === MENU_PAGE ? tab?.id : undefined;
   summarize(source, openIn, tab?.windowId, tabId).catch((error) => console.error("Summarize failed:", error));

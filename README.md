@@ -2,7 +2,7 @@
 
 A Firefox extension that adds a **Summarize** entry to the context menu of web pages and links. It opens [Gemini](https://gemini.google.com) in the sidebar (or in a popup window), fills in a prompt for the page or video you right-clicked, and sends it.
 
-- **YouTube videos** (a video page, or a link to a video): Gemini receives your video instruction, an empty line, then the canonical video address (`https://www.youtube.com/watch?v=<id>`, without playlist, time or tracking parameters).
+- **YouTube videos** (a video page, a link to a video, or a YouTube player embedded in any other page): Gemini receives your video instruction, an empty line, then the canonical video address (`https://www.youtube.com/watch?v=<id>`, without playlist, time or tracking parameters).
 - **Any other page**: Gemini receives your page instruction, the page address, its title and its text, read from the page you right-clicked. Text longer than 30,000 characters is attached as a file named `page-content.txt`, because the Gemini prompt field cuts longer text.
 - **Any other link**: Gemini receives your page instruction and the link address. The linked page is not opened, so its text is not read.
 
@@ -96,6 +96,7 @@ Edit them before packaging the extension to change the defaults, or simply edit 
 - **Gemini layout**: the extension finds the prompt field and the send button on the Gemini page. Google changes this page often, which can break filling in or sending. All the selectors are in `src/content/selectors.js`, with comments, to make them easy to update. When filling in fails, the text is copied to the clipboard and a notice asks you to paste it with Ctrl+V.
 - **Google sign-in**: you must be signed in to Gemini in the same Firefox profile.
 - **Attached file**: attaching long page text relies on a simulated file drop on the Gemini page. If it fails, the text is cut to fit the prompt field and a notice says so.
+- **Embedded YouTube players**: the player shows its own context menu on right-click. Use Shift+right-click, or right-click a second time while YouTube's menu is open, to get the Firefox menu with Summarize. Pages that show only a thumbnail until you start the video (without a YouTube player in a frame) are summarized as ordinary pages.
 - **Pages that cannot be read**: Firefox pages, PDF viewers and some protected sites do not let extensions read their text. Gemini then receives the instruction and the address only.
 - **Window position**: Firefox does not report window moves to extensions, so the popup window checks its own position once per second while it is open.
 

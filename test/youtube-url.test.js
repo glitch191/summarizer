@@ -18,6 +18,10 @@ const valid = [
   ["mobile shorts with tracking", "https://m.youtube.com/shorts/dQw4w9WgXcQ?feature=share"],
   ["uppercase host", "https://WWW.YOUTUBE.COM/watch?v=dQw4w9WgXcQ"],
   ["surrounding whitespace", "  https://youtu.be/dQw4w9WgXcQ  "],
+  ["embedded player", "https://www.youtube.com/embed/dQw4w9WgXcQ"],
+  ["embedded player with options", "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&start=30&rel=0"],
+  ["privacy-enhanced embedded player", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"],
+  ["privacy-enhanced player without www", "https://youtube-nocookie.com/embed/dQw4w9WgXcQ?list=PL123"],
 ];
 
 for (const [name, input] of valid) {
@@ -39,6 +43,9 @@ const invalid = [
   ["other site", "https://example.com/watch?v=dQw4w9WgXcQ"],
   ["lookalike host", "https://youtube.com.example.com/watch?v=dQw4w9WgXcQ"],
   ["non-web scheme", "ftp://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+  ["embedded playlist", "https://www.youtube.com/embed/videoseries?list=PL1234567890"],
+  ["embed without id", "https://www.youtube.com/embed/"],
+  ["privacy-enhanced watch page", "https://www.youtube-nocookie.com/watch?v=dQw4w9WgXcQ"],
 ];
 
 for (const [name, input] of invalid) {
