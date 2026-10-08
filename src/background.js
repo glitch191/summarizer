@@ -1,5 +1,5 @@
 import { buildRequest } from "./prompt.js";
-import { normalizeYouTubeUrl } from "./youtube-url.js";
+import { findTargetVideo, normalizeYouTubeUrl } from "./youtube-url.js";
 
 const GEMINI_URL = "https://gemini.google.com/app";
 // Firefox lets the user withhold this host permission. Without it the content
@@ -8,13 +8,15 @@ const GEMINI_ACCESS = { origins: ["https://gemini.google.com/*"] };
 // Key of the pending task for Gemini in the sidebar, which is not a tab.
 const SIDEBAR_TASK = "sidebar";
 
-// Menu ids carry the display mode ("summarize-page:sidebar"), because the
+// The menu id carries the display mode ("summarize:sidebar"), because the
 // sidebar can only be opened synchronously inside the click handler, before
 // any stored setting could be read.
-const MENU_PAGE = "summarize-page";
-const MENU_LINK = "summarize-link";
+const MENU = "summarize";
 
-// Summarize appears on every web page and on every link to a web page.
+// Summarize appears everywhere on web pages. A single entry covers pages,
+// links, images and videos, so that a linked image does not show it twice.
+// Firefox reports a right-click inside a frame (such as an embedded YouTube
+// player that has not started) as "frame", not "page".
 const WEB_PATTERNS = ["http://*/*", "https://*/*"];
 
 const DEFAULT_SETTINGS = { openIn: "sidebar", sendAutomatically: true, reuseWindow: true };
@@ -29,18 +31,12 @@ const MIN_VISIBLE = 100;
 
 async function createMenus() {
   const { openIn } = await browser.storage.local.get({ openIn: DEFAULT_SETTINGS.openIn });
-  await browser.contextMenus.removeAll();
-  browser.contextMenus.create({
-    id: `${MENU_PAGE}:${openIn}`,
+  await browser.menus.removeAll();
+  browser.menus.create({
+    id: `${MENU}:${openIn}`,
     title: "Summarize",
-    contexts: ["page", "video"],
+    contexts: ["page", "frame", "link", "image", "video"],
     documentUrlPatterns: WEB_PATTERNS,
-  });
-  browser.contextMenus.create({
-    id: `${MENU_LINK}:${openIn}`,
-    title: "Summarize",
-    contexts: ["link"],
-    targetUrlPatterns: WEB_PATTERNS,
   });
 }
 
@@ -50,20 +46,94 @@ browser.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && "openIn" in changes) createMenus();
 });
 
-browser.contextMenus.onClicked.addListener((info, tab) => {
-  const [menu, openIn] = String(info.menuItemId).split(":");
+browser.menus.onClicked.addListener((info, tab) => {
+  const [, openIn] = String(info.menuItemId).split(":");
   // Must run before anything asynchronous: Firefox only lets an extension
   // open its sidebar while handling a user action.
   if (openIn === "sidebar") browser.sidebarAction.open();
 
-  // A right-click inside an embedded YouTube player (an iframe) targets the
-  // video, not the page that embeds it.
-  const embeddedVideo = menu === MENU_PAGE ? normalizeYouTubeUrl(info.frameUrl) : null;
-  const source = menu === MENU_LINK ? info.linkUrl : embeddedVideo || info.pageUrl || tab?.url;
-  // Page text can only be read from the page itself, not from a link target.
-  const tabId = menu === MENU_PAGE ? tab?.id : undefined;
-  summarize(source, openIn, tab?.windowId, tabId).catch((error) => console.error("Summarize failed:", error));
+  findSource(info, tab)
+    .then(({ source, tabId }) => summarize(source, openIn, tab?.windowId, tabId))
+    .catch((error) => console.error("Summarize failed:", error));
 });
+
+// What to summarize, in order of preference:
+//   1. a link to a YouTube video;
+//   2. an embedded YouTube player (the right-click happened in its frame);
+//   3. any other link to a web page (its text is not read);
+//   4. a YouTube video found around the clicked element, for players that
+//      show only a thumbnail until they are started;
+//   5. the page itself, whose text is then read (tabId is set).
+async function findSource(info, tab) {
+  const linkVideo = normalizeYouTubeUrl(info.linkUrl);
+  if (linkVideo) return { source: linkVideo };
+  const frameVideo = normalizeYouTubeUrl(info.frameUrl);
+  if (frameVideo) return { source: frameVideo };
+  if (/^https?:\/\//i.test(info.linkUrl ?? "")) return { source: info.linkUrl };
+
+  const levels = await collectAroundTarget(tab?.id, info.frameId, info.targetElementId);
+  // The clicked image may be a video thumbnail.
+  if (info.srcUrl) levels.unshift([info.srcUrl]);
+  // The address of a frame may carry the video too (an embedding service).
+  if (info.frameUrl) levels.push([safeDecode(info.frameUrl)]);
+  const targetVideo = findTargetVideo(levels);
+  if (targetVideo) return { source: targetVideo };
+
+  return { source: info.pageUrl || tab?.url, tabId: tab?.id };
+}
+
+function safeDecode(text) {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+// Collects the texts around the right-clicked element, for findTargetVideo.
+// Returns an empty list when the element cannot be reached (for example in a
+// frame from another site).
+async function collectAroundTarget(tabId, frameId = 0, targetElementId) {
+  if (tabId === undefined || targetElementId === undefined) {
+    console.warn("Summarize: Firefox did not identify the clicked element.");
+    return [];
+  }
+  try {
+    const [result] = await browser.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      func: collectTargetTexts,
+      args: [targetElementId],
+    });
+    if (!result?.result) console.warn("Summarize: the clicked element could not be found in the page.");
+    return result?.result ?? [];
+  } catch (error) {
+    console.warn("Summarize: could not inspect the clicked element:", error);
+    return [];
+  }
+}
+
+// Runs inside the page. Walks from the clicked element up through its
+// ancestors and returns, for each one, the attributes (as name=value) and
+// background images of the element and everything inside it. Stops at large
+// containers, which are unlikely to be a single video player.
+function collectTargetTexts(targetElementId) {
+  let element = browser.menus?.getTargetElement?.(targetElementId);
+  if (!element) return null;
+  const levels = [];
+  for (let depth = 0; element && element !== document.body && depth < 8; depth++) {
+    const nodes = [element, ...element.querySelectorAll("*")];
+    if (nodes.length > 300) break;
+    const texts = [];
+    for (const node of nodes) {
+      for (const attribute of node.attributes) texts.push(`${attribute.name}=${attribute.value.slice(0, 2000)}`);
+      const background = getComputedStyle(node).backgroundImage;
+      if (background && background !== "none") texts.push(background);
+    }
+    levels.push(texts);
+    element = element.parentElement;
+  }
+  return levels;
+}
 
 // Instructions saved in the settings, or the defaults shipped with the extension.
 const INSTRUCTIONS = {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeYouTubeUrl } from "../src/youtube-url.js";
+import { findTargetVideo, findYouTubeVideos, normalizeYouTubeUrl } from "../src/youtube-url.js";
 
 const CANONICAL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
@@ -53,3 +53,58 @@ for (const [name, input] of invalid) {
     assert.equal(normalizeYouTubeUrl(input), null);
   });
 }
+
+const OTHER = "https://www.youtube.com/watch?v=aaaaaaaaaaa";
+
+const mentions = [
+  ["thumbnail image", "src=https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"],
+  ["webp thumbnail", "srcset=https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/maxresdefault.webp 2x"],
+  ["thumbnail as background", 'url("https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg")'],
+  ["lazy embedded player", "data-src=https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1"],
+  ["protocol-relative player", "src=//www.youtube.com/embed/dQw4w9WgXcQ"],
+  ["watch address in an attribute", "data-url=https://www.youtube.com/watch?feature=x&v=dQw4w9WgXcQ"],
+  ["short link", "href=https://youtu.be/dQw4w9WgXcQ"],
+  ["lite-youtube element", "videoid=dQw4w9WgXcQ"],
+  ["data attribute", "data-video-id=dQw4w9WgXcQ"],
+  ["encoded in a frame address", "https://cdn.example.com/media.html?src=https://www.youtube.com/embed/dQw4w9WgXcQ&x=1"],
+];
+
+for (const [name, text] of mentions) {
+  test(`finds a video in a ${name}`, () => {
+    assert.deepEqual([...findYouTubeVideos(text)], [CANONICAL]);
+  });
+}
+
+const noMentions = [
+  ["unrelated attribute", "class=video-player"],
+  ["bare id in an unrelated attribute", "data-id=dQw4w9WgXcQ"],
+  ["lookalike host", "src=https://notyoutube.com/embed/dQw4w9WgXcQ"],
+  ["embedded playlist", "src=https://www.youtube.com/embed/videoseries?list=PL123"],
+  ["id that is too long", "src=https://i.ytimg.com/vi/dQw4w9WgXcQx/hqdefault.jpg"],
+];
+
+for (const [name, text] of noMentions) {
+  test(`finds no video in a ${name}`, () => {
+    assert.equal(findYouTubeVideos(text).size, 0);
+  });
+}
+
+test("picks the video closest to the clicked element", () => {
+  const levels = [["class=play-button"], ["src=https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "class=x"]];
+  assert.equal(findTargetVideo(levels), CANONICAL);
+});
+
+test("counts the same video mentioned twice as one", () => {
+  const levels = [["src=https://i.ytimg.com/vi/dQw4w9WgXcQ/hq.jpg", "data-src=https://www.youtube.com/embed/dQw4w9WgXcQ"]];
+  assert.equal(findTargetVideo(levels), CANONICAL);
+});
+
+test("gives up when several videos are equally close", () => {
+  const levels = [["class=x"], ["videoid=dQw4w9WgXcQ", "videoid=aaaaaaaaaaa"], [`href=${OTHER}`]];
+  assert.equal(findTargetVideo(levels), null);
+});
+
+test("finds nothing when no level mentions a video", () => {
+  assert.equal(findTargetVideo([["class=x"], []]), null);
+  assert.equal(findTargetVideo([]), null);
+});
