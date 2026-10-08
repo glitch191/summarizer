@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Summarizer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Adds a Summarize entry to the context menu of pages and links. It opens Gemini and sends your instruction with the YouTube video or the page text to summarize.",
   "icons": {
     "16": "icons/summarize.svg",
