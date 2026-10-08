@@ -40,3 +40,41 @@ export function normalizeYouTubeUrl(input) {
   if (!id || id === PLAYLIST_EMBED || !VIDEO_ID.test(id)) return null;
   return `https://www.youtube.com/watch?v=${id}`;
 }
+
+// Video ids found in arbitrary text: addresses of videos, embedded players and
+// thumbnails (i.ytimg.com/vi/<id>/...), or attributes that hold a bare id,
+// written as name=value (videoid=<id> on lite-youtube, data-video-id=<id>...).
+const ID = String.raw`([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])`;
+const ID_PATTERNS = [
+  String.raw`//(?:[\w-]+\.)*youtube(?:-nocookie)?\.com/(?:embed|shorts|live|v)/${ID}`,
+  String.raw`//(?:[\w-]+\.)*youtube\.com/watch\?(?:[^\s"'#]*?&)?v=${ID}`,
+  String.raw`//youtu\.be/${ID}`,
+  String.raw`//(?:[\w-]+\.)*(?:ytimg\.com|img\.youtube\.com)/vi(?:_webp)?/${ID}/`,
+  String.raw`^(?:data-)?(?:video-?id|youtube-?(?:video-?)?id|yt-?id)=${ID}$`,
+].map((source) => new RegExp(source, "gim"));
+
+// Returns the canonical addresses of the YouTube videos mentioned in a text.
+export function findYouTubeVideos(text) {
+  const found = new Set();
+  if (typeof text !== "string") return found;
+  for (const pattern of ID_PATTERNS) {
+    for (const [, id] of text.matchAll(pattern)) {
+      if (id !== PLAYLIST_EMBED) found.add(`https://www.youtube.com/watch?v=${id}`);
+    }
+  }
+  return found;
+}
+
+// Picks the video a right-click was aimed at. Each level holds the texts found
+// around the clicked element, from the element itself outwards. The first
+// level that mentions exactly one video gives the answer; a level that
+// mentions several videos is ambiguous and stops the search.
+export function findTargetVideo(levels) {
+  for (const texts of levels) {
+    const found = new Set();
+    for (const text of texts) for (const video of findYouTubeVideos(text)) found.add(video);
+    if (found.size === 1) return [...found][0];
+    if (found.size > 1) return null;
+  }
+  return null;
+}
