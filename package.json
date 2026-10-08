@@ -1,6 +1,6 @@
 {
   "name": "summarizer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "license": "MIT",
   "description": "Firefox extension that sends a page or a YouTube video to Gemini for a summary.",
